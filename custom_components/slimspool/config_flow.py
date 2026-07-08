@@ -1,29 +1,29 @@
-import homeassistant.helpers.config_validation as cv
+"""Obsługa formularza GUI dla SlimSpool."""
+
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
 
 from .const import CONF_COLOR, CONF_INITIAL_WEIGHT, CONF_MATERIAL, DOMAIN
 
 
-class FilamentManagerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Obsługa formularza GUI do dodawania szpuli."""
+class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Klasa obsługująca przepływ konfiguracji przez interfejs użytkownika."""
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Krok wywoływany, gdy użytkownik dodaje nową szpulę w GUI."""
+        """Krok wywoływany przy dodawaniu nowej szpuli w GUI."""
         errors = {}
 
         if user_input is not None:
-            # Unikalny ID na podstawie nazwy szpuli, żeby nie dodać dwóch takich samych
+            # Unikalny identyfikator na podstawie nazwy szpuli
             unique_id = user_input["name"].lower().replace(" ", "_")
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
 
             return self.async_create_entry(title=user_input["name"], data=user_input)
 
-        # Definicja pól formularza w GUI
+        # Formularz wyświetlany w interfejsie Home Assistant
         DATA_SCHEMA = vol.Schema(
             {
                 vol.Required("name"): str,

@@ -1,0 +1,1 @@
+# SlimSpool (Home Assistant)

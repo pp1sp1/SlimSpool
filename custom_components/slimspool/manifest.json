@@ -1,0 +1,13 @@
+{
+  "domain": "slimspool",
+  "name": "SlimSpool",
+  "codeowners": ["@pp1sp1"],
+  "config_flow": true,
+  "documentation": "https://github.com/pp1sp1/SlimSpool",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/pp1sp1/SlimSpool/issues",
+  "loggers": ["custom_components.slimspool"],
+  "requirements": [],
+  "version": "0.0.1"
+}

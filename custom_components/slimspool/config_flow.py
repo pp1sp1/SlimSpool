@@ -128,11 +128,13 @@ class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Wybór formularza edycji w zależności od typu wpisu."""
-        entry_type = self.config_entry.data.get(ENTRY_TYPE)
+        # POPRAWKA: Pobieramy dane w bezpieczny sposób przez self.config_entry.data
+        current_data = self.config_entry.data
+        entry_type = current_data.get(ENTRY_TYPE)
 
         if user_input is not None:
-            # Aktualizujemy dane w config entry
-            new_data = {**self.config_entry.data, **user_input}
+            # Łączymy stare dane z nowymi wprowadzonymi przez użytkownika
+            new_data = {**current_data, **user_input}
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
@@ -144,6 +146,7 @@ class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
             if entity.domain in ("sensor", "input_text", "select", "input_select"):
                 all_sensors.append(entity.entity_id)
 
+        # POPRAWKA: Dodane bezpieczne fallbacks (.get("klucz", domyślna_wartość))
         if entry_type == TYPE_SPOOL:
             return self.async_show_form(
                 step_id="init",
@@ -151,18 +154,17 @@ class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
                     {
                         vol.Optional(
                             CONF_MATERIAL,
-                            default=self.config_entry.data.get(CONF_MATERIAL),
+                            default=current_data.get(CONF_MATERIAL, "PLA"),
                         ): str,
                         vol.Optional(
-                            CONF_COLOR, default=self.config_entry.data.get(CONF_COLOR)
+                            CONF_COLOR, default=current_data.get(CONF_COLOR, "Czarny")
                         ): vol.In(AVAILABLE_COLORS),
                         vol.Optional(
                             CONF_INITIAL_WEIGHT,
-                            default=self.config_entry.data.get(CONF_INITIAL_WEIGHT),
+                            default=current_data.get(CONF_INITIAL_WEIGHT, 1000),
                         ): int,
                         vol.Optional(
-                            CONF_DENSITY,
-                            default=self.config_entry.data.get(CONF_DENSITY, 1.24),
+                            CONF_DENSITY, default=current_data.get(CONF_DENSITY, 1.24)
                         ): float,
                     }
                 ),
@@ -174,19 +176,19 @@ class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
                     {
                         vol.Required(
                             CONF_ACTIVE_SPOOL_SENSOR,
-                            default=self.config_entry.data.get(
-                                CONF_ACTIVE_SPOOL_SENSOR
+                            default=current_data.get(
+                                CONF_ACTIVE_SPOOL_SENSOR, "Brak / Tylko lokalizacja"
                             ),
                         ): vol.In(all_sensors),
                         vol.Optional(
                             CONF_CONSUMPTION_SENSOR,
-                            default=self.config_entry.data.get(CONF_CONSUMPTION_SENSOR),
+                            default=current_data.get(
+                                CONF_CONSUMPTION_SENSOR, "Brak / Tylko lokalizacja"
+                            ),
                         ): vol.In(all_sensors),
                         vol.Optional(
                             CONF_CONSUMPTION_UNIT,
-                            default=self.config_entry.data.get(
-                                CONF_CONSUMPTION_UNIT, UNIT_GRAMS
-                            ),
+                            default=current_data.get(CONF_CONSUMPTION_UNIT, UNIT_GRAMS),
                         ): vol.In(CONSUMPTION_UNITS),
                     }
                 ),

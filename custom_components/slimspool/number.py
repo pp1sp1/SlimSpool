@@ -4,7 +4,7 @@ import logging
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -18,18 +18,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-COLOR_ICONS = {
-    "Czarny": "mdi:circle-slice-8",
-    "Biały": "mdi:circle-outline",
-    "Szary": "mdi:circle",
-    "Czerwony": "mdi:palette-swatch",
-    "Niebieski": "mdi:water",
-    "Zielony": "mdi:leaf",
-    "Żółty": "mdi:star",
-    "Pomarańczowy": "mdi:fruit-citrus",
-    "Przezroczysty": "mdi:blur-linear",
-}
 
 
 async def async_setup_entry(
@@ -53,7 +41,7 @@ async def async_setup_entry(
 
 
 class SlimSpoolSpoolEntity(NumberEntity):
-    """Obiekt szpuli filamentu z obsługą przeliczania gęstości."""
+    """Obiekt szpuli filamentu."""
 
     def __init__(self, unique_id, name, material, color, initial_weight, density):
         self._attr_unique_id = unique_id
@@ -79,14 +67,15 @@ class SlimSpoolSpoolEntity(NumberEntity):
 
     @property
     def icon(self):
-        return COLOR_ICONS.get(self._color, "mdi:printer-3d-nozzle")
+        """Czytelna ikona szpuli 3D."""
+        return "mdi:printer-3d-nozzle"
 
     @property
     def extra_state_attributes(self):
         return {
             "material": self._material,
-            "color": self._color,
-            "density": self._density,
+            "kolor_filamentu": self._color,
+            "gęstość": self._density,
             "status_lokalizacji": self._location,
         }
 
@@ -108,24 +97,31 @@ class SlimSpoolSpoolEntity(NumberEntity):
         )
         self._update_location(None)
 
+    @callback
     def _update_location(self, event: Event = None) -> None:
+        """Dynamicznie wylicza pozycję (W bezpiecznej pętli callback)."""
         current_location = "Na półce"
-        devices = self.hass.data[DOMAIN]["devices"]
 
-        for dev_id, dev_data in devices.items():
-            sensor_id = dev_data["active_sensor"]
-            state_obj = self.hass.states.get(sensor_id)
+        if DOMAIN in self.hass.data and "devices" in self.hass.data[DOMAIN]:
+            devices = self.hass.data[DOMAIN]["devices"]
 
-            if state_obj and state_obj.state.lower() == self._attr_name.lower():
-                current_location = f"W urządzeniu: {dev_data['name']}"
-                break
+            for dev_id, dev_data in devices.items():
+                sensor_id = dev_data.get("active_sensor")
+                if not sensor_id or sensor_id == "Brak / Tylko lokalizacja":
+                    continue
+
+                state_obj = self.hass.states.get(sensor_id)
+                if state_obj and state_obj.state.lower() == self._attr_name.lower():
+                    current_location = f"W urządzeniu: {dev_data['name']}"
+                    break
 
         if self._location != current_location:
             self._location = current_location
             self.async_write_ha_state()
 
+    @callback
     def _handle_auto_deduct(self, event: Event) -> None:
-        """Automatyczne odejmowanie z przeliczaniem gęstości."""
+        """Odejmowanie wartości (W bezpiecznej pętli callback)."""
         spool_name = event.data.get("spool_name")
         amount = event.data.get("amount", 0.0)
         unit = event.data.get("unit")
@@ -133,19 +129,10 @@ class SlimSpoolSpoolEntity(NumberEntity):
         if spool_name and spool_name.lower() == self._attr_name.lower():
             weight_to_deduct = amount
 
-            # PRZELICZENIA MATEMATYCZNE NA PODSTAWIE JEDNOSTEK
             if unit == UNIT_MM3:
-                # mm³ na gramy: (objętość * gęstość) / 1000
                 weight_to_deduct = (amount * self._density) / 1000.0
             elif unit == UNIT_MM:
-                # mm na gramy dla 1.75mm: (długość * 2.40528 * gęstość) / 1000
                 weight_to_deduct = (amount * 2.405281 * self._density) / 1000.0
 
             self._state = round(max(0.0, self._state - weight_to_deduct), 2)
-            _LOGGER.info(
-                "SlimSpool: Konwersja z %s. Odjęto %sg z %s",
-                unit,
-                round(weight_to_deduct, 4),
-                self._attr_name,
-            )
             self.async_write_ha_state()

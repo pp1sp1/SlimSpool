@@ -1,7 +1,8 @@
-"""Obsługa formularza GUI dla SlimSpool."""
+"""Obsługa formularza GUI i edycji dla SlimSpool."""
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
@@ -28,6 +29,12 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Uruchomienie przepływu opcji (edycji)."""
+        return SlimSpoolOptionsFlowHandler(config_entry)
+
     async def async_step_user(self, user_input=None):
         """Pierwszy krok: Wybór co użytkownik chce dodać."""
         if user_input is not None:
@@ -50,7 +57,7 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_spool(self, user_input=None):
-        """Formularz dodawania szpuli z uwzględnieniem gęstości."""
+        """Formularz dodawania szpuli."""
         if user_input is not None:
             user_input[ENTRY_TYPE] = TYPE_SPOOL
             unique_id = f"spool_{user_input['name'].lower().replace(' ', '_')}"
@@ -70,9 +77,7 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         AVAILABLE_COLORS
                     ),
                     vol.Optional(CONF_INITIAL_WEIGHT, default=1000): int,
-                    vol.Optional(
-                        CONF_DENSITY, default=1.24
-                    ): float,  # Domyślnie gęstość PLA wynosi ok. 1.24 g/cm³
+                    vol.Optional(CONF_DENSITY, default=1.24): float,
                 }
             ),
         )
@@ -108,7 +113,81 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): vol.In(all_sensors),
                     vol.Optional(CONF_CONSUMPTION_UNIT, default=UNIT_GRAMS): vol.In(
                         CONSUMPTION_UNITS
-                    ),  # <-- NOWOŚĆ
+                    ),
                 }
             ),
         )
+
+
+class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
+    """Obsługa edycji konfiguracji przez przycisk KONFIGURUJ w HA."""
+
+    def __init__(self, config_entry):
+        """Inicjalizacja."""
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        """Wybór formularza edycji w zależności od typu wpisu."""
+        entry_type = self.config_entry.data.get(ENTRY_TYPE)
+
+        if user_input is not None:
+            # Aktualizujemy dane w config entry
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data={})
+
+        entity_reg = er.async_get(self.hass)
+        all_sensors = ["Brak / Tylko lokalizacja"]
+        for entity in entity_reg.entities.values():
+            if entity.domain in ("sensor", "input_text", "select", "input_select"):
+                all_sensors.append(entity.entity_id)
+
+        if entry_type == TYPE_SPOOL:
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema(
+                    {
+                        vol.Optional(
+                            CONF_MATERIAL,
+                            default=self.config_entry.data.get(CONF_MATERIAL),
+                        ): str,
+                        vol.Optional(
+                            CONF_COLOR, default=self.config_entry.data.get(CONF_COLOR)
+                        ): vol.In(AVAILABLE_COLORS),
+                        vol.Optional(
+                            CONF_INITIAL_WEIGHT,
+                            default=self.config_entry.data.get(CONF_INITIAL_WEIGHT),
+                        ): int,
+                        vol.Optional(
+                            CONF_DENSITY,
+                            default=self.config_entry.data.get(CONF_DENSITY, 1.24),
+                        ): float,
+                    }
+                ),
+            )
+        else:
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(
+                            CONF_ACTIVE_SPOOL_SENSOR,
+                            default=self.config_entry.data.get(
+                                CONF_ACTIVE_SPOOL_SENSOR
+                            ),
+                        ): vol.In(all_sensors),
+                        vol.Optional(
+                            CONF_CONSUMPTION_SENSOR,
+                            default=self.config_entry.data.get(CONF_CONSUMPTION_SENSOR),
+                        ): vol.In(all_sensors),
+                        vol.Optional(
+                            CONF_CONSUMPTION_UNIT,
+                            default=self.config_entry.data.get(
+                                CONF_CONSUMPTION_UNIT, UNIT_GRAMS
+                            ),
+                        ): vol.In(CONSUMPTION_UNITS),
+                    }
+                ),
+            )

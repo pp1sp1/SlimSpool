@@ -1,11 +1,10 @@
 """Inicjalizacja integracji SlimSpool."""
 
 import logging
-import math
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
@@ -16,8 +15,6 @@ from .const import (
     ENTRY_TYPE,
     TYPE_DEVICE,
     TYPE_SPOOL,
-    UNIT_MM,
-    UNIT_MM3,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,11 +44,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "unit": unit,
         }
 
+        # Słuchacz zmiany aktywnej szpuli (BEZPIECZNY ASYNC)
         if active_sensor and active_sensor != "Brak / Tylko lokalizacja":
 
+            @callback
             def async_active_spool_changed(event: Event):
-                if event.data.get("new_state"):
-                    hass.bus.async_fire("slimspool_relations_updated")
+                """Wywoływane asynchronicznie przez pętlę zdarzeń HA."""
+                hass.bus.async_fire("slimspool_relations_updated")
 
             entry.async_on_unload(
                 async_track_state_change_event(
@@ -59,8 +58,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
             )
 
+        # Słuchacz zużycia filamentu (BEZPIECZNY ASYNC)
         if consumption_sensor and consumption_sensor != "Brak / Tylko lokalizacja":
 
+            @callback
             def async_consumption_changed(event: Event):
                 new_state = event.data.get("new_state")
                 old_state = event.data.get("old_state")
@@ -72,24 +73,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return
 
                 try:
+                    active_spool_state = hass.states.get(active_sensor)
                     active_spool_name = (
-                        hass.states.get(active_sensor).state if active_sensor else None
+                        active_spool_state.state if active_spool_state else None
                     )
                     if not active_spool_name:
                         return
 
-                    raw_diff = float(new_state.state) - float(old_state.state)
+                    diff = float(new_state.state) - float(old_state.state)
                     if old_state.state == "0":
-                        raw_diff = float(new_state.state)
+                        diff = float(new_state.state)
 
-                    if raw_diff > 0:
-                        # Przekazujemy surową różnicę oraz jednostkę do szpuli,
-                        # ponieważ to szpula zna swoją własną gęstość potrzebną do przeliczenia
+                    if diff > 0:
                         hass.bus.async_fire(
                             "slimspool_deduct_weight",
                             {
                                 "spool_name": active_spool_name,
-                                "amount": raw_diff,
+                                "amount": diff,
                                 "unit": unit,
                             },
                         )
@@ -102,9 +102,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
             )
 
+    # Nasłuchiwanie na wypadek edycji danych w locie
+    entry.async_on_unload(entry.add_to_updates_tracker(async_update_listener))
     return True
+
+
+async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Obsługa przeładowania po edycji w GUI."""
+    await hass.config_entries.async_reload(
+        entry.entry_entry_id if hasattr(entry, "entry_entry_id") else entry.entry_id
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Usunięcie konfiguracji."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    config = entry.data
+    entry_type = config.get(ENTRY_TYPE)
+
+    if entry_type == TYPE_SPOOL:
+        return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    elif entry_type == TYPE_DEVICE:
+        if entry.entry_id in hass.data[DOMAIN]["devices"]:
+            del hass.data[DOMAIN]["devices"][entry.entry_id]
+        # Wywołujemy odświeżenie pozycji, bo urządzenie zniknęło, szpula wraca na półkę
+        hass.bus.async_fire("slimspool_relations_updated")
+        return True

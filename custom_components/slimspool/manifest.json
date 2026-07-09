@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/pp1sp1/SlimSpool/issues",
   "loggers": ["custom_components.slimspool"],
   "requirements": [],
-  "version": "0.0.1"
+  "version": "0.0.2"
 }

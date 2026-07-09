@@ -62,38 +62,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if consumption_sensor and consumption_sensor != "Brak / Tylko lokalizacja":
 
             @callback
-            def async_consumption_changed(event: Event):
-                new_state = event.data.get("new_state")
+            def async_consumption_changed(event):
+                """Obsługa zmiany stanu sensora zużycia filamentu."""
                 old_state = event.data.get("old_state")
+                new_state = event.data.get("new_state")
+
+                # Jeśli stany są nieważne lub niedostępne, ignoruj
                 if (
-                    not new_state
-                    or not old_state
-                    or new_state.state in (None, "unknown", "unavailable")
+                    old_state is None
+                    or new_state is None
+                    or old_state.state in ("unknown", "unavailable")
+                    or new_state.state in ("unknown", "unavailable")
                 ):
                     return
 
                 try:
-                    active_spool_state = hass.states.get(active_sensor)
-                    active_spool_name = (
-                        active_spool_state.state if active_spool_state else None
-                    )
-                    if not active_spool_name:
+                    old_val = float(old_state.state)
+                    new_val = float(new_state.state)
+
+                    # Kluczowe zabezpieczenie:
+                    if new_val < old_val:
+                        # Sensor został zresetowany (nowy druk lub restart).
+                        # Przyjmujemy, że od zera przybyło tyle, ile wynosi 'new_val'.
+                        diff = new_val
+                    else:
+                        # Standardowy przyrost w trakcie jednego druku
+                        diff = new_val - old_val
+
+                    if diff <= 0:
                         return
 
-                    diff = float(new_state.state) - float(old_state.state)
-                    if old_state.state == "0":
-                        diff = float(new_state.state)
+                    # Pobieramy nazwę aktywnej szpuli z drugiego sensora
+                    active_spool = "Brak"
+                    active_spool_sensor = entry.data.get(CONF_ACTIVE_SPOOL_SENSOR)
+                    if active_spool_sensor:
+                        spool_state = hass.states.get(active_spool_sensor)
+                        if spool_state:
+                            active_spool = spool_state.state
 
-                    if diff > 0:
+                    # Jeśli mamy aktywną szpulę, odpalamy zdarzenie odejmowania w pętli HA
+                    if active_spool and active_spool != "Brak / Tylko lokalizacja":
+                        # POPRAWKA OSTRZEŻENIA Z LOGÓW: Używamy hass.loop.call_soon_threadsafe
+                        # lub zwykłego hass.bus.async_fire bezpośrednio (bo jesteśmy w @callback w MainThread)
                         hass.bus.async_fire(
                             "slimspool_deduct_weight",
                             {
-                                "spool_name": active_spool_name,
+                                "spool_name": active_spool,
                                 "amount": diff,
-                                "unit": unit,
-                            },
+                                "unit": entry.data.get(CONF_CONSUMPTION_UNIT, "g")
+                            }
                         )
+
                 except ValueError:
+                    # Ignoruj błędy konwersji tekstu na float
                     pass
 
             entry.async_on_unload(

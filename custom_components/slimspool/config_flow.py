@@ -27,7 +27,7 @@ from .const import (
 
 
 class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Klasa obsługująca dynamiczny przepływ konfiguracji."""
+    """Klasa obsługująca dynamiczny przepływ konfiguracji z GUI."""
 
     VERSION = 1
 
@@ -36,8 +36,8 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        """Uruchomienie przepływu opcji (edycji) - Nowy standard HA."""
-        return SlimSpoolOptionsFlowHandler()
+        """Uruchomienie przepływu opcji (edycji) - Poprawny format dla klas potomnych."""
+        return SlimSpoolOptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
         """Pierwszy krok: Wybór co użytkownik chce dodać."""
@@ -124,11 +124,14 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
-    """Obsługa edycji konfiguracji przez przycisk KONFIGURUJ w HA."""
+    """Klasyczny i stabilny handler edycji wpisów."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Inicjalizacja z jawnym przypisaniem wpisu (odporne na wersje HA)."""
+        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Wybór formularza edycji w zależności od typu wpisu."""
-        # Wersje HA od końca 2024 automatycznie mapują self.config_entry
+        """Wybór formularza edycji."""
         current_data = self.config_entry.data
         entry_type = current_data.get(ENTRY_TYPE)
 

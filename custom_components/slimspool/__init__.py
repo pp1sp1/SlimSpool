@@ -81,7 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     new_val = float(new_state.state)
 
                     # Kluczowe zabezpieczenie:
-                    if new_val < old_val:
+                    if new_val < old_val * 0.85:
                         # Sensor został zresetowany (nowy druk lub restart).
                         # Przyjmujemy, że od zera przybyło tyle, ile wynosi 'new_val'.
                         diff = new_val
@@ -89,8 +89,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         # Standardowy przyrost w trakcie jednego druku
                         diff = new_val - old_val
 
-                    if diff <= 0:
-                        return
+                    # if diff <= 0:
+                    #     return
 
                     # Pobieramy nazwę aktywnej szpuli z drugiego sensora
                     active_spool = "Brak"

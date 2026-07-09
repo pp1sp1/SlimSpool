@@ -75,35 +75,41 @@ class SlimSpoolSpoolEntity(NumberEntity):
         if not self._color:
             return "grey"
 
-        color_lower = str(self._color).lower()
+        color = str(self._color).strip().lower()
 
-        # Mapowanie popularnych kolorów filamentu
         color_map = {
-            "Biały": "white",
-            "White": "white",
-            "Czarny": "black",
-            "Black": "black",
-            "Czerwony": "red",
-            "Red": "red",
-            "Niebieski": "blue",
-            "Blue": "blue",
-            "Zielony": "green",
-            "Green": "green",
-            "Żółty": "yellow",
-            "Yellow": "yellow",
-            "Pomarańczowy": "orange",
-            "Orange": "orange",
-            "Fioletowy": "purple",
-            "Purple": "purple",
-            "Różowy": "pink",
-            "Pink": "pink",
-            "Szary": "grey",
-            "Gray": "grey",
-            "Srebrny": "silver",
-            "Złoty": "gold",
+            # Polski
+            "niebieski": "blue",
+            "błękitny": "blue",
+            "czerwony": "red",
+            "zielony": "green",
+            "żółty": "yellow",
+            "pomarańczowy": "orange",
+            "fioletowy": "purple",
+            "różowy": "pink",
+            "biały": "white",
+            "czarny": "black",
+            "szary": "grey",
+            "szare": "grey",
+            "srebrny": "silver",
+            "złoty": "gold",
+            # Angielski (na wszelki wypadek)
+            "blue": "blue",
+            "red": "red",
+            "green": "green",
+            "yellow": "yellow",
+            "orange": "orange",
+            "purple": "purple",
+            "pink": "pink",
+            "white": "white",
+            "black": "black",
+            "grey": "grey",
+            "gray": "grey",
+            "silver": "silver",
+            "gold": "gold",
         }
 
-        return color_map.get(color_lower, "grey")  # domyślnie grey
+        return color_map.get(color, "grey")
 
     @property
     def extra_state_attributes(self):

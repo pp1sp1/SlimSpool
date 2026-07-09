@@ -1,59 +1,110 @@
 """Inicjalizacja integracji SlimSpool."""
 
 import logging
+import math
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import DOMAIN
+from .const import (
+    CONF_ACTIVE_SPOOL_SENSOR,
+    CONF_CONSUMPTION_SENSOR,
+    CONF_CONSUMPTION_UNIT,
+    DOMAIN,
+    ENTRY_TYPE,
+    TYPE_DEVICE,
+    TYPE_SPOOL,
+    UNIT_MM,
+    UNIT_MM3,
+)
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.NUMBER]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Konfiguracja wpisu dodanego z poziomu GUI."""
-    hass.data.setdefault(DOMAIN, {})
+    """Konfiguracja wpisu (Szpula lub Urządzenie)."""
+    hass.data.setdefault(DOMAIN, {"spools": {}, "devices": {}})
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    config = entry.data
+    entry_type = config.get(ENTRY_TYPE)
 
-    # Rejestracja globalnej usługi do odejmowania wagi (jeśli jeszcze nie istnieje)
-    if not hass.services.has_service(DOMAIN, "deduct"):
+    if entry_type == TYPE_SPOOL:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-        async def handle_deduct(call: ServiceCall):
-            """Globalny serwis wywoływany z automatyzacji."""
-            entity_id = call.data.get("entity_id")
-            amount = float(call.data.get("amount", 0.0))
+    elif entry_type == TYPE_DEVICE:
+        device_name = config.get("name")
+        active_sensor = config.get(CONF_ACTIVE_SPOOL_SENSOR)
+        consumption_sensor = config.get(CONF_CONSUMPTION_SENSOR)
+        unit = config.get(CONF_CONSUMPTION_UNIT)
 
-            state = hass.states.get(entity_id)
-            if state:
+        hass.data[DOMAIN]["devices"][entry.entry_id] = {
+            "name": device_name,
+            "active_sensor": active_sensor,
+            "consumption_sensor": consumption_sensor,
+            "unit": unit,
+        }
+
+        if active_sensor and active_sensor != "Brak / Tylko lokalizacja":
+
+            def async_active_spool_changed(event: Event):
+                if event.data.get("new_state"):
+                    hass.bus.async_fire("slimspool_relations_updated")
+
+            entry.async_on_unload(
+                async_track_state_change_event(
+                    hass, [active_sensor], async_active_spool_changed
+                )
+            )
+
+        if consumption_sensor and consumption_sensor != "Brak / Tylko lokalizacja":
+
+            def async_consumption_changed(event: Event):
+                new_state = event.data.get("new_state")
+                old_state = event.data.get("old_state")
+                if (
+                    not new_state
+                    or not old_state
+                    or new_state.state in (None, "unknown", "unavailable")
+                ):
+                    return
+
                 try:
-                    current_weight = float(state.state)
-                    new_weight = max(0.0, current_weight - amount)
+                    active_spool_name = (
+                        hass.states.get(active_sensor).state if active_sensor else None
+                    )
+                    if not active_spool_name:
+                        return
 
-                    # Aktualizacja stanu encji z zachowaniem jej atrybutów
-                    hass.states.async_set(
-                        entity_id, round(new_weight, 2), state.attributes
-                    )
-                    _LOGGER.info(
-                        "SlimSpool: Odjęto %sg z %s. Pozostało: %s",
-                        amount,
-                        entity_id,
-                        new_weight,
-                    )
+                    raw_diff = float(new_state.state) - float(old_state.state)
+                    if old_state.state == "0":
+                        raw_diff = float(new_state.state)
+
+                    if raw_diff > 0:
+                        # Przekazujemy surową różnicę oraz jednostkę do szpuli,
+                        # ponieważ to szpula zna swoją własną gęstość potrzebną do przeliczenia
+                        hass.bus.async_fire(
+                            "slimspool_deduct_weight",
+                            {
+                                "spool_name": active_spool_name,
+                                "amount": raw_diff,
+                                "unit": unit,
+                            },
+                        )
                 except ValueError:
-                    _LOGGER.error(
-                        "SlimSpool: Błędny stan encji %s (oczekiwano liczby)", entity_id
-                    )
-            else:
-                _LOGGER.warning("SlimSpool: Encja %s nie istnieje", entity_id)
+                    pass
 
-        hass.services.async_register(DOMAIN, "deduct", handle_deduct)
+            entry.async_on_unload(
+                async_track_state_change_event(
+                    hass, [consumption_sensor], async_consumption_changed
+                )
+            )
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Obsługa usunięcia szpuli przez interfejs użytkownika."""
+    """Usunięcie konfiguracji."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

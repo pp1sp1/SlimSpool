@@ -68,7 +68,42 @@ class SlimSpoolSpoolEntity(NumberEntity):
     @property
     def icon(self):
         """Czytelna ikona szpuli 3D."""
-        return "mdi:printer-3d-nozzle"
+        return "mdi:circle-slice-8"
+
+    def _get_icon_color(self) -> str:
+        """Zwraca kolor ikony na podstawie koloru filamentu."""
+        if not self._color:
+            return "grey"
+
+        color_lower = str(self._color).lower()
+
+        # Mapowanie popularnych kolorów filamentu
+        color_map = {
+            "biały": "white",
+            "white": "white",
+            "czarny": "black",
+            "black": "black",
+            "czerwony": "red",
+            "red": "red",
+            "niebieski": "blue",
+            "blue": "blue",
+            "zielony": "green",
+            "green": "green",
+            "żółty": "yellow",
+            "yellow": "yellow",
+            "pomarańczowy": "orange",
+            "orange": "orange",
+            "fioletowy": "purple",
+            "purple": "purple",
+            "różowy": "pink",
+            "pink": "pink",
+            "szary": "grey",
+            "gray": "grey",
+            "srebrny": "silver",
+            "złoty": "gold",
+        }
+
+        return color_map.get(color_lower, "grey")  # domyślnie grey
 
     @property
     def extra_state_attributes(self):
@@ -77,6 +112,7 @@ class SlimSpoolSpoolEntity(NumberEntity):
             "kolor_filamentu": self._color,
             "gęstość": self._density,
             "status_lokalizacji": self._location,
+            "icon_color": self._get_icon_color(),
         }
 
     async def async_set_native_value(self, value: float) -> None:

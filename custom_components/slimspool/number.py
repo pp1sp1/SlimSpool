@@ -2,7 +2,7 @@
 
 import logging
 
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.number import RestoreNumber, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -40,29 +40,34 @@ async def async_setup_entry(
     )
 
 
-class SlimSpoolSpoolEntity(NumberEntity):
-    """Obiekt szpuli filamentu."""
+class SlimSpoolSpoolEntity(RestoreNumber):
+    """Obiekt szpuli filamentu zachowujący stan po restarcie."""
 
     def __init__(self, unique_id, name, material, color, initial_weight, density):
+        """Inicjalizacja encji."""
         self._attr_unique_id = unique_id
         self._attr_name = name
         self._material = material
         self._color = color
         self._density = float(density)
+
+        # Wartość domyślna / ratunkowa (jeśli brak wpisu w bazie danych)
         self._state = float(initial_weight)
         self._location = "Na półce"
 
         self._attr_mode = NumberMode.BOX
         self._attr_native_min_value = 0.0
-        self._attr_native_max_value = 2000.0
+        self._attr_native_max_value = 5000.0
         self._attr_native_step = 0.1
 
     @property
     def native_value(self):
+        """Zwraca aktualną wagę."""
         return self._state
 
     @property
     def native_unit_of_measurement(self):
+        """Jednostka miary."""
         return "g"
 
     @property
@@ -93,7 +98,7 @@ class SlimSpoolSpoolEntity(NumberEntity):
             "szare": "grey",
             "srebrny": "silver",
             "złoty": "gold",
-            # Angielski (na wszelki wypadek)
+            # Angielski
             "blue": "blue",
             "red": "red",
             "green": "green",
@@ -113,6 +118,7 @@ class SlimSpoolSpoolEntity(NumberEntity):
 
     @property
     def extra_state_attributes(self):
+        """Zwraca atrybuty encji do karty Tile."""
         return {
             "material": self._material,
             "kolor_filamentu": self._color,
@@ -122,11 +128,28 @@ class SlimSpoolSpoolEntity(NumberEntity):
         }
 
     async def async_set_native_value(self, value: float) -> None:
+        """Obsługa ręcznej zmiany stanu za pomocą pola tekstowego/suwaka."""
         self._state = round(max(0.0, value), 2)
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
+        """Wywoływane przy rejestracji encji - przywracanie stanu."""
         await super().async_added_to_hass()
+
+        # Próba odzyskania stanu z bazy danych
+        last_number_data = await self.async_get_last_number_data()
+        if last_number_data and last_number_data.native_value is not None:
+            self._state = round(float(last_number_data.native_value), 2)
+            _LOGGER.info("Przywrócono wagę szpuli %s z bazy: %s g", self._attr_name, self._state)
+        else:
+            last_state = await self.async_get_last_state()
+            if last_state and last_state.state not in ("unknown", "unavailable"):
+                try:
+                    self._state = round(float(last_state.state), 2)
+                except ValueError:
+                    pass
+
+        # Subskrypcje zdarzeń systemowych
         self.async_on_remove(
             self.hass.bus.async_listen(
                 "slimspool_relations_updated", self._update_location
@@ -137,6 +160,8 @@ class SlimSpoolSpoolEntity(NumberEntity):
                 "slimspool_deduct_weight", self._handle_auto_deduct
             )
         )
+
+        # Pierwsze wymuszenie odczytu pozycji
         self._update_location(None)
 
     @callback
@@ -174,6 +199,7 @@ class SlimSpoolSpoolEntity(NumberEntity):
             if unit == UNIT_MM3:
                 weight_to_deduct = (amount * self._density) / 1000.0
             elif unit == UNIT_MM:
+                # Wzór dla dyszy/filamentu 1.75mm uwzględniający wybraną gęstość
                 weight_to_deduct = (amount * 2.405281 * self._density) / 1000.0
 
             self._state = round(max(0.0, self._state - weight_to_deduct), 2)

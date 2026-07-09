@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SlimSpool - Wybór typu",
+        "data": {
+          "entry_type": "Co chcesz dodać?"
+        }
+      },
+      "spool": {
+        "title": "Dodawanie nowej szpuli",
+        "data": {
+          "name": "Nazwa szpuli (np. Devil Design Czarny)",
+          "material": "Materiał (np. PLA, PETG)",
+          "color": "Kolor",
+          "initial_weight": "Waga początkowa filamentu (g)",
+          "density": "Gęstość tworzywa (g/cm³)"
+        }
+      },
+      "device": {
+        "title": "Dodawanie urządzenia",
+        "data": {
+          "name": "Nazwa drukarki / suszarki",
+          "device_type": "Typ urządzenia",
+          "active_spool_sensor": "Sensor aktywnej szpuli (Stan = Nazwa szpuli)",
+          "consumption_sensor": "Sensor zużycia (Total Extrusion)",
+          "consumption_unit": "Jednostka sensora zużycia"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edycja parametrów SlimSpool",
+        "data": {
+          "material": "Materiał (np. PLA, PETG)",
+          "color": "Kolor",
+          "initial_weight": "Waga aktualna/początkowa (g)",
+          "density": "Gęstość tworzywa (g/cm³)",
+          "active_spool_sensor": "Sensor aktywnej szpuli",
+          "consumption_sensor": "Sensor zużycia",
+          "consumption_unit": "Jednostka sensora zużycia"
+        }
+      }
+    }
+  }
+}

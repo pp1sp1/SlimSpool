@@ -1,5 +1,7 @@
 """Obsługa formularza GUI i edycji dla SlimSpool."""
 
+from typing import Any
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -31,9 +33,11 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        """Uruchomienie przepływu opcji (edycji)."""
-        return SlimSpoolOptionsFlowHandler(config_entry)
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Uruchomienie przepływu opcji (edycji) - Nowy standard HA."""
+        return SlimSpoolOptionsFlowHandler()
 
     async def async_step_user(self, user_input=None):
         """Pierwszy krok: Wybór co użytkownik chce dodać."""
@@ -122,18 +126,13 @@ class SlimSpoolConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
     """Obsługa edycji konfiguracji przez przycisk KONFIGURUJ w HA."""
 
-    def __init__(self, config_entry):
-        """Inicjalizacja."""
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Wybór formularza edycji w zależności od typu wpisu."""
-        # POPRAWKA: Pobieramy dane w bezpieczny sposób przez self.config_entry.data
+        # Wersje HA od końca 2024 automatycznie mapują self.config_entry
         current_data = self.config_entry.data
         entry_type = current_data.get(ENTRY_TYPE)
 
         if user_input is not None:
-            # Łączymy stare dane z nowymi wprowadzonymi przez użytkownika
             new_data = {**current_data, **user_input}
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
@@ -146,7 +145,6 @@ class SlimSpoolOptionsFlowHandler(config_entries.OptionsFlow):
             if entity.domain in ("sensor", "input_text", "select", "input_select"):
                 all_sensors.append(entity.entity_id)
 
-        # POPRAWKA: Dodane bezpieczne fallbacks (.get("klucz", domyślna_wartość))
         if entry_type == TYPE_SPOOL:
             return self.async_show_form(
                 step_id="init",

@@ -2,6 +2,7 @@
   "domain": "slimspool",
   "name": "SlimSpool",
   "codeowners": ["@pp1sp1"],
+  "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/pp1sp1/SlimSpool",
   "integration_type": "hub",
